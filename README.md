@@ -20,6 +20,9 @@ samples, guidance on mobile development, and a full API reference.
 // It is a companion app for the "Tripal" hotel and activity reservation app.
 // The Tripal Dashboard allows places to add their photos.
 
+// make all files organized in module screens and master data 
+
+
 here is my supabase tables 
 [
   {

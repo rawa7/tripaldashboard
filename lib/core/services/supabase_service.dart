@@ -9,6 +9,9 @@ class SupabaseService {
   // Get the supabase client instance
   SupabaseClient get client => _supabaseClient;
   
+  // Static access to the initialized client
+  static SupabaseClient get staticClient => Supabase.instance.client;
+  
   // Initialize Supabase
   static Future<SupabaseClient> initialize() async {
     // Load environment variables

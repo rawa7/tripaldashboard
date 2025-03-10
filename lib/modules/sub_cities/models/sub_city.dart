@@ -1,28 +1,32 @@
 import 'package:uuid/uuid.dart';
 
-class Region {
+class SubCity {
   final String id;
+  final String cityId;
   final String name;
   final String description;
   final DateTime createdAt;
   final String? thumbnailUrl;
 
-  Region({
+  SubCity({
     required this.id,
+    required this.cityId,
     required this.name,
     required this.description,
     required this.createdAt,
     this.thumbnailUrl,
   });
 
-  // Create a new region with a generated UUID
-  factory Region.create({
+  // Create a new sub_city with a generated UUID
+  factory SubCity.create({
+    required String cityId,
     required String name,
     required String description,
     String? thumbnailUrl,
   }) {
-    return Region(
+    return SubCity(
       id: const Uuid().v4(),
+      cityId: cityId,
       name: name,
       description: description,
       createdAt: DateTime.now().toUtc(),
@@ -30,10 +34,11 @@ class Region {
     );
   }
 
-  // Create a region from a JSON map (from Supabase)
-  factory Region.fromJson(Map<String, dynamic> json) {
-    return Region(
+  // Create a sub_city from a JSON map (from Supabase)
+  factory SubCity.fromJson(Map<String, dynamic> json) {
+    return SubCity(
       id: json['id'],
+      cityId: json['city_id'],
       name: json['name'],
       description: json['description'],
       createdAt: DateTime.parse(json['created_at']),
@@ -41,10 +46,11 @@ class Region {
     );
   }
 
-  // Convert region to a JSON map (for Supabase)
+  // Convert sub_city to a JSON map (for Supabase)
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'city_id': cityId,
       'name': name,
       'description': description,
       'created_at': createdAt.toIso8601String(),
@@ -52,25 +58,27 @@ class Region {
     };
   }
 
-  // Create a copy of this region with updated fields
-  Region copyWith({
+  // Create a copy of this sub_city with updated fields
+  SubCity copyWith({
+    String? cityId,
     String? name,
     String? description,
     String? thumbnailUrl,
   }) {
-    return Region(
+    return SubCity(
       id: id,
+      cityId: cityId ?? this.cityId,
       name: name ?? this.name,
       description: description ?? this.description,
       createdAt: createdAt,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
     );
   }
-
+  
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
-    return other is Region && other.id == id;
+    return other is SubCity && other.id == id;
   }
 
   @override
