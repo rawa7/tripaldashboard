@@ -1,5 +1,6 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/foundation.dart';
 
 class SupabaseService {
   final SupabaseClient _supabaseClient;
@@ -10,27 +11,50 @@ class SupabaseService {
   SupabaseClient get client => _supabaseClient;
   
   // Static access to the initialized client
-  static SupabaseClient get staticClient => Supabase.instance.client;
+  static SupabaseClient get staticClient {
+    try {
+      final client = Supabase.instance.client;
+      debugPrint('🔍 SupabaseService.staticClient: Successfully got Supabase client');
+      return client;
+    } catch (e, stackTrace) {
+      debugPrint('❌ SupabaseService.staticClient error: $e');
+      debugPrint('❌ Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
   
   // Initialize Supabase
   static Future<SupabaseClient> initialize() async {
-    // Load environment variables
-    await dotenv.load(fileName: '.env');
-    
-    // Get Supabase URL and anon key from .env file
-    final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
-    final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
-    
-    if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
-      throw Exception('Supabase credentials not found in .env file');
+    try {
+      debugPrint('🔍 Initializing Supabase...');
+      
+      // Load environment variables
+      await dotenv.load(fileName: '.env');
+      debugPrint('🔍 Loaded .env file');
+      
+      // Get Supabase URL and anon key from .env file
+      final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+      final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+      
+      debugPrint('🔍 Supabase URL: ${supabaseUrl.isNotEmpty ? 'Found' : 'Not found'}');
+      debugPrint('🔍 Supabase Anon Key: ${supabaseAnonKey.isNotEmpty ? 'Found' : 'Not found'}');
+      
+      if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
+        throw Exception('Supabase credentials not found in .env file');
+      }
+      
+      await Supabase.initialize(
+        url: supabaseUrl,
+        anonKey: supabaseAnonKey,
+      );
+      
+      debugPrint('✅ Supabase initialized successfully');
+      return Supabase.instance.client;
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error initializing Supabase: $e');
+      debugPrint('❌ Stack trace: $stackTrace');
+      rethrow;
     }
-    
-    await Supabase.initialize(
-      url: supabaseUrl,
-      anonKey: supabaseAnonKey,
-    );
-    
-    return Supabase.instance.client;
   }
   
   // Generic fetch method with pagination

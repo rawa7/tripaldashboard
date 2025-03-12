@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tripaldashboard/modules/areas/models/area.dart';
 import 'package:tripaldashboard/modules/areas/models/area_image.dart';
 import 'package:tripaldashboard/modules/areas/providers/area_service.dart';
+import 'package:flutter/foundation.dart';
 
 // Provider for the AreaService
 final areaServiceProvider = Provider<AreaService>((ref) {
@@ -11,22 +12,56 @@ final areaServiceProvider = Provider<AreaService>((ref) {
 
 // Provider for all areas with filtering and pagination
 final areasProvider = FutureProvider.family<List<Area>, Map<String, dynamic>>((ref, params) async {
+  debugPrint('🔍 areasProvider called with params: $params');
+  
+  // Create a stable cache key
+  final cacheKey = 'areas_${params['page']}_${params['limit']}_${params['subCityId']}_${params['searchQuery']}';
+  debugPrint('🔍 Cache key: $cacheKey');
+  
+  // Make sure we keep the provider alive
+  ref.keepAlive();
+  
   final areaService = ref.watch(areaServiceProvider);
-  return areaService.getAreas(
-    page: params['page'] as int?,
-    limit: params['limit'] as int?,
-    subCityId: params['subCityId'] as String?,
-    searchQuery: params['searchQuery'] as String?,
-  );
+  try {
+    final areas = await areaService.getAreas(
+      page: params['page'] as int?,
+      limit: params['limit'] as int?,
+      subCityId: params['subCityId'] as String?,
+      searchQuery: params['searchQuery'] as String?,
+    );
+    debugPrint('🔍 areasProvider returned ${areas.length} areas');
+    return areas;
+  } catch (e, stackTrace) {
+    debugPrint('❌ areasProvider error: $e');
+    debugPrint('❌ Stack trace: $stackTrace');
+    rethrow;
+  }
 });
 
 // Provider for areas count
 final areasCountProvider = FutureProvider.family<int, Map<String, dynamic>>((ref, params) async {
+  debugPrint('🔍 areasCountProvider called with params: $params');
+  
+  // Create a stable cache key
+  final cacheKey = 'areas_count_${params['subCityId']}_${params['searchQuery']}';
+  debugPrint('🔍 Count cache key: $cacheKey');
+  
+  // Make sure we keep the provider alive
+  ref.keepAlive();
+  
   final areaService = ref.watch(areaServiceProvider);
-  return areaService.getAreasCount(
-    subCityId: params['subCityId'] as String?,
-    searchQuery: params['searchQuery'] as String?,
-  );
+  try {
+    final count = await areaService.getAreasCount(
+      subCityId: params['subCityId'] as String?,
+      searchQuery: params['searchQuery'] as String?,
+    );
+    debugPrint('🔍 areasCountProvider returned count: $count');
+    return count;
+  } catch (e, stackTrace) {
+    debugPrint('❌ areasCountProvider error: $e');
+    debugPrint('❌ Stack trace: $stackTrace');
+    rethrow;
+  }
 });
 
 // Provider for a single area by ID
@@ -50,12 +85,17 @@ class AreaNotifier extends StateNotifier<AsyncValue<Area?>> {
   
   // Create a new area
   Future<Area?> createArea(Area area) async {
+    debugPrint('🔍 AreaNotifier.createArea called with: ${area.toJson()}');
     state = const AsyncValue.loading();
     try {
+      debugPrint('🔍 Calling areaService.createArea');
       final newArea = await _areaService.createArea(area);
+      debugPrint('🔍 areaService.createArea returned: ${newArea?.id}');
       state = AsyncValue.data(newArea);
       return newArea;
     } catch (e, stack) {
+      debugPrint('❌ AreaNotifier.createArea error: $e');
+      debugPrint('❌ Stack trace: $stack');
       state = AsyncValue.error(e, stack);
       return null;
     }
@@ -63,12 +103,16 @@ class AreaNotifier extends StateNotifier<AsyncValue<Area?>> {
   
   // Update an existing area
   Future<Area?> updateArea(Area area) async {
+    debugPrint('🔍 AreaNotifier.updateArea called with: ${area.toJson()}');
     state = const AsyncValue.loading();
     try {
       final updatedArea = await _areaService.updateArea(area);
+      debugPrint('🔍 areaService.updateArea returned: ${updatedArea?.id}');
       state = AsyncValue.data(updatedArea);
       return updatedArea;
     } catch (e, stack) {
+      debugPrint('❌ AreaNotifier.updateArea error: $e');
+      debugPrint('❌ Stack trace: $stack');
       state = AsyncValue.error(e, stack);
       return null;
     }

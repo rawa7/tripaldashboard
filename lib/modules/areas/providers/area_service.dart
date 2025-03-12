@@ -29,6 +29,8 @@ class AreaService {
     String? searchQuery,
   }) async {
     try {
+      debugPrint('🔍 getAreas called with: page=$page, limit=$limit, subCityId=$subCityId, searchQuery=$searchQuery');
+      
       final query = _supabase
           .from('areas')
           .select('*, sub_cities(name)');
@@ -53,10 +55,16 @@ class AreaService {
         orderedQuery = orderedQuery.range(offset, offset + limit - 1);
       }
       
+      debugPrint('🔍 Executing Supabase query for areas...');
       final data = await orderedQuery;
-      return _processAreaResults(data);
-    } catch (e) {
-      debugPrint('Error fetching areas: $e');
+      debugPrint('🔍 Areas data received: ${data.length} items');
+      
+      final areas = _processAreaResults(data);
+      debugPrint('🔍 Processed areas: ${areas.length} items');
+      return areas;
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error fetching areas: $e');
+      debugPrint('❌ Stack trace: $stackTrace');
       return [];
     }
   }
@@ -106,18 +114,60 @@ class AreaService {
   // Create a new area
   Future<Area?> createArea(Area area) async {
     try {
+      debugPrint('🔍 createArea called with: ${area.toJson()}');
+      
+      // Log all fields to check for missing required data
+      debugPrint('🔍 Validating area data:');
+      debugPrint('  - name: ${area.name}');
+      debugPrint('  - description: ${area.description}');
+      debugPrint('  - subCityId: ${area.subCityId}');
+      
+      // Ensure required fields are present
+      if (area.name.isEmpty) {
+        throw Exception('Area name cannot be empty');
+      }
+      
+      if (area.description.isEmpty) {
+        throw Exception('Area description cannot be empty');
+      }
+      
+      if (area.subCityId == null) {
+        throw Exception('Sub-city ID cannot be null');
+      }
+      
+      // Verify the sub-city exists
+      try {
+        final subCityCheck = await _supabase
+            .from('sub_cities')
+            .select('id')
+            .eq('id', area.subCityId!)  // Use non-null assertion since we checked above
+            .single();
+        debugPrint('🔍 Sub-city check result: $subCityCheck');
+      } catch (e) {
+        debugPrint('❌ Warning: Sub-city may not exist: $e');
+        // Continue anyway as it might just be a data inconsistency
+      }
+      
+      // Create the insert data map
+      final insertData = area.toJson();
+      debugPrint('🔍 Inserting area with data: $insertData');
+      
+      // Perform the insert
       final data = await _supabase
           .from('areas')
-          .insert(area.toJson())
+          .insert(insertData)
           .select('*, sub_cities(name)')
           .single();
+      
+      debugPrint('🔍 Area created successfully: $data');
       
       return Area.fromJson({
         ...data,
         'sub_cities': data['sub_cities'],
       });
-    } catch (e) {
-      debugPrint('Error creating area: $e');
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error creating area: $e');
+      debugPrint('❌ Stack trace: $stackTrace');
       throw Exception('Failed to create area: $e');
     }
   }

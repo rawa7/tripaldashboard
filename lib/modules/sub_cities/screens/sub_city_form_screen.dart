@@ -1,33 +1,49 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:form_builder_validators/form_builder_validators.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:tripaldashboard/core/services/supabase_service.dart';
-import 'package:tripaldashboard/modules/sub_cities/models/sub_city.dart';
-import 'package:tripaldashboard/modules/sub_cities/providers/sub_city_provider.dart';
+import 'package:tripaldashboard/core/providers/services_provider.dart';
+import 'package:tripaldashboard/core/utils/image_utils.dart';
 import 'package:tripaldashboard/modules/cities/models/city.dart';
 import 'package:tripaldashboard/modules/cities/providers/city_provider.dart';
+import 'package:tripaldashboard/modules/sub_cities/models/sub_city.dart';
+import 'package:tripaldashboard/modules/sub_cities/providers/sub_city_provider.dart';
+import 'package:tripaldashboard/core/services/supabase_service.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
 class SubCityFormScreen extends ConsumerStatefulWidget {
   final SubCity? subCityToEdit;
-  final String? preselectedCityId;
 
-  const SubCityFormScreen({
-    Key? key,
-    this.subCityToEdit,
-    this.preselectedCityId,
-  }) : super(key: key);
+  const SubCityFormScreen({Key? key, this.subCityToEdit}) : super(key: key);
 
   @override
   ConsumerState<SubCityFormScreen> createState() => _SubCityFormScreenState();
 }
 
-class _SubCityFormScreenState extends ConsumerState<SubCityFormScreen> {
+class _SubCityFormScreenState extends ConsumerState<SubCityFormScreen> with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
+  
+  // English form controllers
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
+  
+  // Arabic form controllers
+  final _nameArController = TextEditingController();
+  final _descriptionArController = TextEditingController();
+  
+  // Kurdish form controllers
+  final _nameKuController = TextEditingController();
+  final _descriptionKuController = TextEditingController();
+  
+  // Badinani form controllers
+  final _nameBadController = TextEditingController();
+  final _descriptionBadController = TextEditingController();
+  
+  // Tab controller for language selection
+  late TabController _tabController;
   
   City? _selectedCity;
   String? _thumbnailUrl;
@@ -35,7 +51,7 @@ class _SubCityFormScreenState extends ConsumerState<SubCityFormScreen> {
   bool _isUploading = false;
   List<City> _cities = [];
   
-  static const String _bucketName = 'sub_city';
+  static const String _bucketName = 'sub_city_images';
   static const String _directory = 'thumbnails';
 
   @override
@@ -43,13 +59,44 @@ class _SubCityFormScreenState extends ConsumerState<SubCityFormScreen> {
     super.initState();
     _loadCities();
     
+    // Initialize tab controller
+    _tabController = TabController(length: 4, vsync: this);
+    
     // If editing, populate the form
     if (widget.subCityToEdit != null) {
+      // English fields
       _nameController.text = widget.subCityToEdit!.name;
-      _descriptionController.text = widget.subCityToEdit!.description;
+      _descriptionController.text = widget.subCityToEdit!.description ?? '';
+      
+      // Arabic fields
+      _nameArController.text = widget.subCityToEdit!.nameAr ?? '';
+      _descriptionArController.text = widget.subCityToEdit!.descriptionAr ?? '';
+      
+      // Kurdish fields
+      _nameKuController.text = widget.subCityToEdit!.nameKu ?? '';
+      _descriptionKuController.text = widget.subCityToEdit!.descriptionKu ?? '';
+      
+      // Badinani fields
+      _nameBadController.text = widget.subCityToEdit!.nameBad ?? '';
+      _descriptionBadController.text = widget.subCityToEdit!.descriptionBad ?? '';
+      
       _thumbnailUrl = widget.subCityToEdit!.thumbnailUrl;
       _loadCityForSubCity();
     }
+  }
+  
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descriptionController.dispose();
+    _nameArController.dispose();
+    _descriptionArController.dispose();
+    _nameKuController.dispose();
+    _descriptionKuController.dispose();
+    _nameBadController.dispose();
+    _descriptionBadController.dispose();
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadCities() async {
@@ -62,18 +109,6 @@ class _SubCityFormScreenState extends ConsumerState<SubCityFormScreen> {
       
       setState(() {
         _cities = cities.map((city) => City.fromJson(city)).toList();
-        
-        // If a city ID is preselected (e.g., from parent screen)
-        if (widget.preselectedCityId != null && _selectedCity == null) {
-          final foundCity = _cities.where(
-            (city) => city.id == widget.preselectedCityId,
-          ).toList();
-          
-          if (foundCity.isNotEmpty) {
-            _selectedCity = foundCity.first;
-          }
-        }
-        
         _isLoading = false;
       });
     } catch (e) {
@@ -102,6 +137,315 @@ class _SubCityFormScreenState extends ConsumerState<SubCityFormScreen> {
     }
   }
 
+  Future<void> _saveSubCity() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_selectedCity == null) {
+      _showErrorSnackBar('Please select a city');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final subCityProvider = ref.read(subCityServiceProvider);
+      
+      final subCityData = widget.subCityToEdit?.copyWith(
+        cityId: _selectedCity!.id,
+        name: _nameController.text,
+        description: _descriptionController.text,
+        nameAr: _nameArController.text.isEmpty ? null : _nameArController.text,
+        nameKu: _nameKuController.text.isEmpty ? null : _nameKuController.text,
+        nameBad: _nameBadController.text.isEmpty ? null : _nameBadController.text,
+        descriptionAr: _descriptionArController.text.isEmpty ? null : _descriptionArController.text,
+        descriptionKu: _descriptionKuController.text.isEmpty ? null : _descriptionKuController.text,
+        descriptionBad: _descriptionBadController.text.isEmpty ? null : _descriptionBadController.text,
+        thumbnailUrl: _thumbnailUrl,
+      ) ?? SubCity.create(
+        cityId: _selectedCity!.id,
+        name: _nameController.text,
+        description: _descriptionController.text,
+        nameAr: _nameArController.text.isEmpty ? null : _nameArController.text,
+        nameKu: _nameKuController.text.isEmpty ? null : _nameKuController.text,
+        nameBad: _nameBadController.text.isEmpty ? null : _nameBadController.text,
+        descriptionAr: _descriptionArController.text.isEmpty ? null : _descriptionArController.text,
+        descriptionKu: _descriptionKuController.text.isEmpty ? null : _descriptionKuController.text,
+        descriptionBad: _descriptionBadController.text.isEmpty ? null : _descriptionBadController.text,
+        thumbnailUrl: _thumbnailUrl,
+      );
+
+      if (widget.subCityToEdit != null) {
+        // Update existing sub_city
+        try {
+          await SupabaseService.staticClient
+              .from('sub_cities')
+              .update(subCityData.toJson())
+              .eq('id', widget.subCityToEdit!.id);
+          
+          print('SubCity updated successfully');
+          
+          if (!mounted) return;
+          Navigator.pop(context, true);
+        } catch (e) {
+          print('Error updating SubCity: $e');
+          if (!mounted) return;
+          _showErrorSnackBar('Failed to update sub-city: ${e.toString()}');
+        }
+      } else {
+        // Create new sub_city
+        try {
+          await SupabaseService.staticClient
+              .from('sub_cities')
+              .insert(subCityData.toJson());
+          
+          print('SubCity created successfully');
+          
+          if (!mounted) return;
+          Navigator.pop(context, true);
+        } catch (e) {
+          print('Error creating SubCity: $e');
+          if (!mounted) return;
+          _showErrorSnackBar('Failed to create sub-city: ${e.toString()}');
+        }
+      }
+    } catch (e) {
+      print('Error in _saveSubCity: $e');
+      if (!mounted) return;
+      _showErrorSnackBar('Error: ${e.toString()}');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  // Helper method to build language-specific input fields
+  Widget _buildLanguageFields({
+    required TextEditingController nameController,
+    required TextEditingController descriptionController,
+    required String language,
+    bool isRequired = false,
+    TextDirection? textDirection,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextFormField(
+            controller: nameController,
+            decoration: InputDecoration(
+              labelText: 'Name ($language)${isRequired ? ' *' : ''}',
+              border: const OutlineInputBorder(),
+            ),
+            textDirection: textDirection,
+            validator: isRequired ? (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please enter a name';
+              }
+              return null;
+            } : null,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: descriptionController,
+            decoration: InputDecoration(
+              labelText: 'Description ($language)${isRequired ? ' *' : ''}',
+              border: const OutlineInputBorder(),
+              alignLabelWithHint: true,
+            ),
+            textDirection: textDirection,
+            maxLines: 3,
+            validator: isRequired ? (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please enter a description';
+              }
+              return null;
+            } : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.subCityToEdit == null ? 'Add Sub-City' : 'Edit Sub-City'),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Form(
+              key: _formKey,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // City Dropdown
+                    FormBuilderDropdown<City>(
+                      name: 'city',
+                      decoration: const InputDecoration(
+                        labelText: 'City',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _cities.map((city) => DropdownMenuItem(
+                        value: city,
+                        child: Text(city.name),
+                      )).toList(),
+                      validator: FormBuilderValidators.required(),
+                      onChanged: (city) {
+                        setState(() {
+                          _selectedCity = city;
+                        });
+                      },
+                      initialValue: _selectedCity,
+                    ),
+                    
+                    const SizedBox(height: 16),
+                    
+                    // Language tabs
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Sub-City Details',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const Divider(),
+                            const SizedBox(height: 16),
+                            
+                            // Tabbed interface for languages
+                            DefaultTabController(
+                              length: 4,
+                              child: Column(
+                                children: [
+                                  TabBar(
+                                    controller: _tabController,
+                                    isScrollable: true,
+                                    tabs: const [
+                                      Tab(text: 'English'),
+                                      Tab(text: 'العربية'),
+                                      Tab(text: 'کوردی'),
+                                      Tab(text: 'بادینی'),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  SizedBox(
+                                    height: 240,
+                                    child: TabBarView(
+                                      controller: _tabController,
+                                      children: [
+                                        // English fields
+                                        _buildLanguageFields(
+                                          nameController: _nameController,
+                                          descriptionController: _descriptionController,
+                                          language: 'English',
+                                          isRequired: true,
+                                        ),
+                                        
+                                        // Arabic fields
+                                        _buildLanguageFields(
+                                          nameController: _nameArController,
+                                          descriptionController: _descriptionArController,
+                                          language: 'Arabic',
+                                          textDirection: TextDirection.rtl,
+                                        ),
+                                        
+                                        // Kurdish fields
+                                        _buildLanguageFields(
+                                          nameController: _nameKuController,
+                                          descriptionController: _descriptionKuController,
+                                          language: 'Kurdish',
+                                        ),
+                                        
+                                        // Badinani fields
+                                        _buildLanguageFields(
+                                          nameController: _nameBadController,
+                                          descriptionController: _descriptionBadController,
+                                          language: 'Badinani',
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 16),
+                    
+                    // Image Upload Section
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Thumbnail Image',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const Divider(),
+                            const SizedBox(height: 16),
+                            
+                            // Image preview
+                            if (_thumbnailUrl != null) ...[
+                              SizedBox(
+                                height: 200,
+                                width: double.infinity,
+                                child: Image.network(
+                                  _thumbnailUrl!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => 
+                                      const Center(child: Icon(Icons.image_not_supported, size: 50)),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
+                            
+                            // Upload button
+                            Center(
+                              child: ElevatedButton.icon(
+                                onPressed: _isUploading ? null : _pickImage,
+                                icon: const Icon(Icons.upload),
+                                label: Text(_isUploading ? 'Uploading...' : 'Upload Image'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // Submit Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _isLoading || _isUploading ? null : _saveSubCity,
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            widget.subCityToEdit == null ? 'Create Sub-City' : 'Update Sub-City',
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+    );
+  }
+
   Future<void> _pickImage() async {
     try {
       final picker = ImagePicker();
@@ -112,267 +456,47 @@ class _SubCityFormScreenState extends ConsumerState<SubCityFormScreen> {
       if (!mounted) return; // Check if widget is still mounted
       setState(() => _isUploading = true);
       
-      // Generate a unique filename
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      // Upload image
+      final file = await pickedFile.readAsBytes();
       final fileExt = p.extension(pickedFile.path);
-      final fileName = '$timestamp$fileExt';
+      final fileName = '${const Uuid().v4()}$fileExt';
       final filePath = '$_directory/$fileName';
       
-      // Upload the file
-      final fileBytes = await pickedFile.readAsBytes();
-      
       try {
-        final response = await SupabaseService.staticClient
+        await SupabaseService.staticClient
             .storage
             .from(_bucketName)
-            .uploadBinary(filePath, fileBytes);
+            .uploadBinary(filePath, file);
         
-        if (response.contains('error')) {
-          throw Exception('Failed to upload image');
-        }
-        
-        // Get the public URL
-        final imageUrl = SupabaseService.staticClient
+        // Get public URL
+        final imageUrlResponse = SupabaseService.staticClient
             .storage
             .from(_bucketName)
             .getPublicUrl(filePath);
         
-        if (!mounted) return; // Check again before setting state
+        if (!mounted) return;
         setState(() {
-          _thumbnailUrl = imageUrl;
+          _thumbnailUrl = imageUrlResponse;
           _isUploading = false;
         });
       } catch (e) {
-        print('Storage error: $e');
         if (!mounted) return;
         setState(() => _isUploading = false);
         _showErrorSnackBar('Failed to upload image: ${e.toString()}');
       }
     } catch (e) {
-      print('General error: $e');
       if (!mounted) return;
       setState(() => _isUploading = false);
-      _showErrorSnackBar('Failed to pick image: ${e.toString()}');
-    }
-  }
-
-  Future<void> _saveSubCity() async {
-    // Check if form is valid
-    if (_formKey.currentState == null || !_formKey.currentState!.validate()) {
-      _showErrorSnackBar('Please fill out all required fields correctly');
-      return;
-    }
-    
-    if (_selectedCity == null) {
-      _showErrorSnackBar('Please select a city');
-      return;
-    }
-    
-    try {
-      if (!mounted) return;
-      setState(() => _isLoading = true);
-      
-      final SubCity subCity;
-      
-      if (widget.subCityToEdit != null) {
-        // Update existing sub_city
-        subCity = widget.subCityToEdit!.copyWith(
-          cityId: _selectedCity!.id,
-          name: _nameController.text.trim(),
-          description: _descriptionController.text.trim(),
-          thumbnailUrl: _thumbnailUrl,
-        );
-        
-        await ref.read(subCityNotifierProvider.notifier).updateSubCity(subCity);
-        print('Sub-City updated successfully');
-      } else {
-        // Create new sub_city
-        subCity = SubCity.create(
-          cityId: _selectedCity!.id,
-          name: _nameController.text.trim(),
-          description: _descriptionController.text.trim(),
-          thumbnailUrl: _thumbnailUrl,
-        );
-        
-        await ref.read(subCityNotifierProvider.notifier).createSubCity(subCity);
-        print('Sub-City created successfully');
-      }
-      
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      
-      // Show success message and navigate back
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sub-City saved successfully!')),
-      );
-      Navigator.pop(context, true);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      _showErrorSnackBar('Failed to save sub-city: ${e.toString()}');
+      _showErrorSnackBar('Error picking image: ${e.toString()}');
     }
   }
 
   void _showErrorSnackBar(String message) {
-    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
-    );
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _descriptionController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.subCityToEdit != null ? 'Edit Sub-City' : 'Add Sub-City'),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Thumbnail Image
-                    Center(
-                      child: GestureDetector(
-                        onTap: _isUploading ? null : _pickImage,
-                        child: Container(
-                          width: 200,
-                          height: 150,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.grey),
-                          ),
-                          child: _isUploading
-                            ? const Center(child: CircularProgressIndicator())
-                            : _thumbnailUrl != null
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(
-                                    _thumbnailUrl!,
-                                    fit: BoxFit.cover,
-                                    width: double.infinity,
-                                    height: double.infinity,
-                                    errorBuilder: (_, __, ___) => const Icon(
-                                      Icons.image_not_supported,
-                                      size: 50,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.add_photo_alternate,
-                                  size: 50,
-                                  color: Colors.grey,
-                                ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    
-                    // City Dropdown
-                    DropdownButtonFormField<City>(
-                      decoration: const InputDecoration(
-                        labelText: 'City',
-                        border: OutlineInputBorder(),
-                      ),
-                      value: _findCityInList(_selectedCity),
-                      hint: const Text('Select City'),
-                      items: _cities.map((city) {
-                        return DropdownMenuItem(
-                          value: city,
-                          child: Text(city.name),
-                        );
-                      }).toList(),
-                      onChanged: (newValue) {
-                        setState(() {
-                          _selectedCity = newValue;
-                        });
-                      },
-                      validator: (value) {
-                        if (value == null) {
-                          return 'Please select a city';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // Name Field
-                    TextFormField(
-                      controller: _nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Sub-City Name',
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please enter a sub-city name';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // Description Field
-                    TextFormField(
-                      controller: _descriptionController,
-                      decoration: const InputDecoration(
-                        labelText: 'Description',
-                        border: OutlineInputBorder(),
-                      ),
-                      maxLines: 3,
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please enter a description';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                    
-                    // Submit Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _saveSubCity,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                        child: Text(
-                          widget.subCityToEdit != null ? 'Update Sub-City' : 'Add Sub-City',
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
     );
-  }
-  
-  City? _findCityInList(City? selectedCity) {
-    if (selectedCity == null || _cities.isEmpty) return null;
-    
-    // Find the city in our loaded list that matches the ID of the selected city
-    try {
-      return _cities.firstWhere((city) => city.id == selectedCity.id);
-    } catch (e) {
-      // If no match is found, return null so no item is selected
-      print('Could not find city with ID: ${selectedCity.id} in cities list');
-      return null;
-    }
   }
 } 

@@ -288,7 +288,6 @@ class _SubCitiesListScreenState extends ConsumerState<SubCitiesListScreen> {
       MaterialPageRoute(
         builder: (context) => SubCityFormScreen(
           subCityToEdit: subCity,
-          preselectedCityId: _selectedCityId,
         ),
       ),
     );

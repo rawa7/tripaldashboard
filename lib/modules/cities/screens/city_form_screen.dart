@@ -23,10 +23,27 @@ class CityFormScreen extends ConsumerStatefulWidget {
   ConsumerState<CityFormScreen> createState() => _CityFormScreenState();
 }
 
-class _CityFormScreenState extends ConsumerState<CityFormScreen> {
+class _CityFormScreenState extends ConsumerState<CityFormScreen> with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
+  
+  // English form controllers
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
+  
+  // Arabic form controllers
+  final _nameArController = TextEditingController();
+  final _descriptionArController = TextEditingController();
+  
+  // Kurdish form controllers
+  final _nameKuController = TextEditingController();
+  final _descriptionKuController = TextEditingController();
+  
+  // Badinani form controllers
+  final _nameBadController = TextEditingController();
+  final _descriptionBadController = TextEditingController();
+  
+  // Tab controller for language selection
+  late TabController _tabController;
   
   Region? _selectedRegion;
   String? _thumbnailUrl;
@@ -42,10 +59,27 @@ class _CityFormScreenState extends ConsumerState<CityFormScreen> {
     super.initState();
     _loadRegions();
     
+    // Initialize tab controller
+    _tabController = TabController(length: 4, vsync: this);
+    
     // If editing, populate the form
     if (widget.cityToEdit != null) {
+      // English fields
       _nameController.text = widget.cityToEdit!.name;
       _descriptionController.text = widget.cityToEdit!.description ?? '';
+      
+      // Arabic fields
+      _nameArController.text = widget.cityToEdit!.nameAr ?? '';
+      _descriptionArController.text = widget.cityToEdit!.descriptionAr ?? '';
+      
+      // Kurdish fields
+      _nameKuController.text = widget.cityToEdit!.nameKu ?? '';
+      _descriptionKuController.text = widget.cityToEdit!.descriptionKu ?? '';
+      
+      // Badinani fields
+      _nameBadController.text = widget.cityToEdit!.nameBad ?? '';
+      _descriptionBadController.text = widget.cityToEdit!.descriptionBad ?? '';
+      
       _thumbnailUrl = widget.cityToEdit!.thumbnailUrl;
       _loadRegionForCity();
     }
@@ -147,37 +181,47 @@ class _CityFormScreenState extends ConsumerState<CityFormScreen> {
   }
 
   Future<void> _saveCity() async {
-    // Check if form is valid
-    if (_formKey.currentState == null || !_formKey.currentState!.validate()) {
-      _showErrorSnackBar('Please fill out all required fields correctly');
-      return;
-    }
-    
+    if (!_formKey.currentState!.validate()) return;
     if (_selectedRegion == null) {
       _showErrorSnackBar('Please select a region');
       return;
     }
-    
+
+    setState(() => _isLoading = true);
+
     try {
-      if (!mounted) return;
-      setState(() => _isLoading = true);
+      final cityProvider = ref.read(cityServiceProvider);
       
-      final cityData = {
-        'name': _nameController.text.trim(),
-        'description': _descriptionController.text.trim(),
-        'region_id': _selectedRegion!.id,
-      };
-      
-      if (_thumbnailUrl != null) {
-        cityData['thumbnail_url'] = _thumbnailUrl!;
-      }
-      
+      final cityData = widget.cityToEdit?.copyWith(
+        regionId: _selectedRegion!.id,
+        name: _nameController.text,
+        description: _descriptionController.text,
+        nameAr: _nameArController.text.isEmpty ? null : _nameArController.text,
+        nameKu: _nameKuController.text.isEmpty ? null : _nameKuController.text,
+        nameBad: _nameBadController.text.isEmpty ? null : _nameBadController.text,
+        descriptionAr: _descriptionArController.text.isEmpty ? null : _descriptionArController.text,
+        descriptionKu: _descriptionKuController.text.isEmpty ? null : _descriptionKuController.text,
+        descriptionBad: _descriptionBadController.text.isEmpty ? null : _descriptionBadController.text,
+        thumbnailUrl: _thumbnailUrl,
+      ) ?? City.create(
+        regionId: _selectedRegion!.id,
+        name: _nameController.text,
+        description: _descriptionController.text,
+        nameAr: _nameArController.text.isEmpty ? null : _nameArController.text,
+        nameKu: _nameKuController.text.isEmpty ? null : _nameKuController.text,
+        nameBad: _nameBadController.text.isEmpty ? null : _nameBadController.text,
+        descriptionAr: _descriptionArController.text.isEmpty ? null : _descriptionArController.text,
+        descriptionKu: _descriptionKuController.text.isEmpty ? null : _descriptionKuController.text,
+        descriptionBad: _descriptionBadController.text.isEmpty ? null : _descriptionBadController.text,
+        thumbnailUrl: _thumbnailUrl,
+      );
+
       if (widget.cityToEdit != null) {
         // Update existing city
         try {
           await SupabaseService.staticClient
               .from('cities')
-              .update(cityData)
+              .update(cityData.toJson())
               .eq('id', widget.cityToEdit!.id);
           
           print('City updated successfully');
@@ -186,14 +230,26 @@ class _CityFormScreenState extends ConsumerState<CityFormScreen> {
           throw e;
         }
       } else {
-        // Create new city
-        cityData['id'] = const Uuid().v4();
-        cityData['created_at'] = DateTime.now().toIso8601String();
+        // Create new city with a generated UUID and current timestamp
+        final newCity = City(
+          id: const Uuid().v4(),
+          regionId: cityData.regionId,
+          name: cityData.name,
+          description: cityData.description,
+          nameAr: cityData.nameAr,
+          nameKu: cityData.nameKu,
+          nameBad: cityData.nameBad,
+          descriptionAr: cityData.descriptionAr,
+          descriptionKu: cityData.descriptionKu,
+          descriptionBad: cityData.descriptionBad,
+          createdAt: DateTime.now().toUtc(),
+          thumbnailUrl: cityData.thumbnailUrl,
+        );
         
         try {
           await SupabaseService.staticClient
               .from('cities')
-              .insert(cityData);
+              .insert(newCity.toJson());
           
           print('City created successfully');
         } catch (e) {
@@ -228,7 +284,63 @@ class _CityFormScreenState extends ConsumerState<CityFormScreen> {
   void dispose() {
     _nameController.dispose();
     _descriptionController.dispose();
+    _nameArController.dispose();
+    _descriptionArController.dispose();
+    _nameKuController.dispose();
+    _descriptionKuController.dispose();
+    _nameBadController.dispose();
+    _descriptionBadController.dispose();
+    _tabController.dispose();
     super.dispose();
+  }
+
+  // Helper method to build language-specific input fields
+  Widget _buildLanguageFields({
+    required TextEditingController nameController,
+    required TextEditingController descriptionController,
+    required String language,
+    bool isRequired = false,
+    TextDirection? textDirection,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextFormField(
+            controller: nameController,
+            decoration: InputDecoration(
+              labelText: 'Name ($language)${isRequired ? ' *' : ''}',
+              border: const OutlineInputBorder(),
+            ),
+            textDirection: textDirection,
+            validator: isRequired ? (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please enter a name';
+              }
+              return null;
+            } : null,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: descriptionController,
+            decoration: InputDecoration(
+              labelText: 'Description ($language)${isRequired ? ' *' : ''}',
+              border: const OutlineInputBorder(),
+              alignLabelWithHint: true,
+            ),
+            textDirection: textDirection,
+            maxLines: 3,
+            validator: isRequired ? (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please enter a description';
+              }
+              return null;
+            } : null,
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -313,32 +425,80 @@ class _CityFormScreenState extends ConsumerState<CityFormScreen> {
                   ),
                   const SizedBox(height: 16),
                   
-                  // Name Field
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'City Name',
-                      border: OutlineInputBorder(),
+                  // Language tabs
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'City Details',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          const Divider(),
+                          const SizedBox(height: 16),
+                          
+                          // Tabbed interface for languages
+                          DefaultTabController(
+                            length: 4,
+                            child: Column(
+                              children: [
+                                TabBar(
+                                  controller: _tabController,
+                                  isScrollable: true,
+                                  tabs: const [
+                                    Tab(text: 'English'),
+                                    Tab(text: 'العربية'),
+                                    Tab(text: 'کوردی'),
+                                    Tab(text: 'بادینی'),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                SizedBox(
+                                  height: 240,
+                                  child: TabBarView(
+                                    controller: _tabController,
+                                    children: [
+                                      // English fields
+                                      _buildLanguageFields(
+                                        nameController: _nameController,
+                                        descriptionController: _descriptionController,
+                                        language: 'English',
+                                        isRequired: true,
+                                      ),
+                                      
+                                      // Arabic fields
+                                      _buildLanguageFields(
+                                        nameController: _nameArController,
+                                        descriptionController: _descriptionArController,
+                                        language: 'Arabic',
+                                        textDirection: TextDirection.rtl,
+                                      ),
+                                      
+                                      // Kurdish fields
+                                      _buildLanguageFields(
+                                        nameController: _nameKuController,
+                                        descriptionController: _descriptionKuController,
+                                        language: 'Kurdish',
+                                      ),
+                                      
+                                      // Badinani fields
+                                      _buildLanguageFields(
+                                        nameController: _nameBadController,
+                                        descriptionController: _descriptionBadController,
+                                        language: 'Badinani',
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Please enter a city name';
-                      }
-                      return null;
-                    },
                   ),
-                  const SizedBox(height: 16),
-                  
-                  // Description Field
-                  TextFormField(
-                    controller: _descriptionController,
-                    decoration: const InputDecoration(
-                      labelText: 'Description',
-                      border: OutlineInputBorder(),
-                    ),
-                    maxLines: 3,
-                  ),
-                  const SizedBox(height: 24),
                   
                   // Submit Button
                   SizedBox(

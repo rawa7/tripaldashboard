@@ -6,6 +6,18 @@ import 'package:tripaldashboard/modules/areas/screens/area_form_screen.dart';
 import 'package:tripaldashboard/modules/areas/screens/area_detail_screen.dart';
 import 'package:tripaldashboard/modules/sub_cities/models/sub_city.dart';
 import 'package:tripaldashboard/modules/sub_cities/providers/sub_city_provider.dart';
+import 'package:flutter/foundation.dart';
+
+// Create a StateProvider to store the query parameters
+final areaQueryParamsProvider = StateProvider<Map<String, dynamic>>((ref) => {
+  'page': 1,
+  'limit': 10,
+  'subCityId': null,
+  'searchQuery': '',
+});
+
+// Provider for current display language
+final displayLanguageProvider = StateProvider<String>((ref) => 'en'); // Default to English
 
 class AreasListScreen extends ConsumerStatefulWidget {
   const AreasListScreen({Key? key}) : super(key: key);
@@ -26,6 +38,16 @@ class _AreasListScreenState extends ConsumerState<AreasListScreen> {
   void initState() {
     super.initState();
     _loadSubCities();
+    
+    // Initialize query params in the next frame to avoid build-time issues
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(areaQueryParamsProvider.notifier).state = {
+        'page': _currentPage,
+        'limit': _pageSize,
+        'subCityId': _selectedSubCityId,
+        'searchQuery': _searchQuery,
+      };
+    });
   }
   
   Future<void> _loadSubCities() async {
@@ -33,20 +55,36 @@ class _AreasListScreenState extends ConsumerState<AreasListScreen> {
       _isLoading = true;
     });
     
-    final subCities = await ref.read(subCityServiceProvider).getSubCities();
-    
-    setState(() {
-      _subCities = subCities;
-      _isLoading = false;
-    });
+    try {
+      final subCities = await ref.read(subCityServiceProvider).getSubCities();
+      
+      if (mounted) {
+        setState(() {
+          _subCities = subCities;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading sub-cities: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
   
-  Map<String, dynamic> get _queryParams => {
-    'page': _currentPage,
-    'limit': _pageSize,
-    'subCityId': _selectedSubCityId,
-    'searchQuery': _searchQuery,
-  };
+  // Update the query params in the provider
+  void _updateQueryParams() {
+    if (mounted) {
+      ref.read(areaQueryParamsProvider.notifier).state = {
+        'page': _currentPage,
+        'limit': _pageSize,
+        'subCityId': _selectedSubCityId,
+        'searchQuery': _searchQuery,
+      };
+    }
+  }
   
   void _nextPage(int totalCount) {
     final int totalPages = (totalCount / _pageSize).ceil();
@@ -54,6 +92,7 @@ class _AreasListScreenState extends ConsumerState<AreasListScreen> {
       setState(() {
         _currentPage++;
       });
+      _updateQueryParams();
     }
   }
   
@@ -62,13 +101,8 @@ class _AreasListScreenState extends ConsumerState<AreasListScreen> {
       setState(() {
         _currentPage--;
       });
+      _updateQueryParams();
     }
-  }
-  
-  void _resetPagination() {
-    setState(() {
-      _currentPage = 1;
-    });
   }
   
   void _onSearch(String query) {
@@ -76,6 +110,7 @@ class _AreasListScreenState extends ConsumerState<AreasListScreen> {
       _searchQuery = query;
       _currentPage = 1;
     });
+    _updateQueryParams();
   }
   
   void _onSubCityFilterChanged(String? subCityId) {
@@ -83,11 +118,18 @@ class _AreasListScreenState extends ConsumerState<AreasListScreen> {
       _selectedSubCityId = subCityId;
       _currentPage = 1;
     });
+    _updateQueryParams();
   }
   
   void _refreshAreas() {
-    ref.refresh(areasProvider(_queryParams));
-    ref.refresh(areasCountProvider(_queryParams));
+    debugPrint('🔍 Manually refreshing areas list');
+    
+    // Invalidate the providers to force a refresh
+    ref.invalidate(areasProvider);
+    ref.invalidate(areasCountProvider);
+    
+    // Update the query params
+    _updateQueryParams();
   }
   
   void _showDeleteConfirmation(BuildContext context, Area area) {
@@ -130,15 +172,56 @@ class _AreasListScreenState extends ConsumerState<AreasListScreen> {
     }
   }
   
+  // Get the appropriate name based on the current language
+  String getLocalizedName(Area area, String languageCode) {
+    switch (languageCode) {
+      case 'ar':
+        return area.nameAr ?? area.name;
+      case 'ku':
+        return area.nameKu ?? area.name;
+      case 'bad':
+        return area.nameBad ?? area.name;
+      case 'en':
+      default:
+        return area.name;
+    }
+  }
+  
   @override
   Widget build(BuildContext context) {
-    final areasAsync = ref.watch(areasProvider(_queryParams));
-    final totalCountAsync = ref.watch(areasCountProvider(_queryParams));
+    // Get the current query params from the provider
+    final queryParams = ref.watch(areaQueryParamsProvider);
+    
+    // Watch the areas and count providers with the query params
+    final areasAsync = ref.watch(areasProvider(queryParams));
+    final totalCountAsync = ref.watch(areasCountProvider(queryParams));
+    
+    // Get current display language
+    final currentLanguage = ref.watch(displayLanguageProvider);
+    
+    debugPrint('🔍 AreasListScreen state: ${areasAsync.toString()}');
     
     return Scaffold(
       appBar: AppBar(
         title: const Text('Areas'),
         actions: [
+          // Language selector dropdown
+          DropdownButton<String>(
+            value: currentLanguage,
+            underline: Container(), // Remove underline
+            icon: const Icon(Icons.language, color: Colors.white),
+            items: const [
+              DropdownMenuItem(value: 'en', child: Text('English')),
+              DropdownMenuItem(value: 'ar', child: Text('العربية')),
+              DropdownMenuItem(value: 'ku', child: Text('کوردی')),
+              DropdownMenuItem(value: 'bad', child: Text('بادینی')),
+            ],
+            onChanged: (value) {
+              if (value != null) {
+                ref.read(displayLanguageProvider.notifier).state = value;
+              }
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _refreshAreas,
@@ -170,7 +253,7 @@ class _AreasListScreenState extends ConsumerState<AreasListScreen> {
                     prefixIcon: Icon(Icons.search),
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (value) => _onSearch(value),
+                  onChanged: _onSearch,
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String?>(
@@ -195,7 +278,7 @@ class _AreasListScreenState extends ConsumerState<AreasListScreen> {
             ),
           ),
           
-          // Area list
+          // Areas list
           Expanded(
             child: areasAsync.when(
               data: (areas) {
@@ -232,7 +315,7 @@ class _AreasListScreenState extends ConsumerState<AreasListScreen> {
                             : const CircleAvatar(
                                 child: Icon(Icons.domain),
                               ),
-                        title: Text(area.name),
+                        title: Text(getLocalizedName(area, currentLanguage)),
                         subtitle: Text(
                           area.subCityName ?? 'No Sub-City',
                         ),
@@ -286,6 +369,8 @@ class _AreasListScreenState extends ConsumerState<AreasListScreen> {
           totalCountAsync.when(
             data: (totalCount) {
               final totalPages = (totalCount / _pageSize).ceil();
+              if (totalPages <= 1) return const SizedBox();
+              
               return Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(

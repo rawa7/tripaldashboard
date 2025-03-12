@@ -10,45 +10,78 @@ import 'package:tripaldashboard/modules/areas/screens/areas_list_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  print("============ APP INITIALIZATION ============");
-  print("1. Loading environment variables...");
+  debugPrint("============ APP INITIALIZATION ============");
+  debugPrint("1. Loading environment variables...");
   
   try {
     // Initialize Supabase
-    print("2. Initializing Supabase...");
+    debugPrint("2. Initializing Supabase...");
     final supabaseClient = await SupabaseService.initialize();
-    print("3. Supabase initialized successfully!");
+    debugPrint("3. Supabase initialized successfully!");
     
     // Check authentication status
     final session = await supabaseClient.auth.currentSession;
-    print("4. Current auth session: ${session != null ? 'Active' : 'None'}");
+    debugPrint("4. Current auth session: ${session != null ? 'Active' : 'None'}");
     
     // Check service status
-    print("7. Checking Supabase connection...");
+    debugPrint("5. Checking Supabase connection...");
     try {
       final healthCheck = await supabaseClient.from('regions').select().limit(1);
-      print("8. Database connection successful: ${healthCheck != null ? 'Yes' : 'No'}");
-    } catch (e) {
-      print("8. ERROR checking database connection: $e");
+      debugPrint("6. Database connection successful: ${healthCheck != null ? 'Yes' : 'No'}");
+      debugPrint("   Response data: $healthCheck");
+    } catch (e, stackTrace) {
+      debugPrint("❌ ERROR checking database connection: $e");
+      debugPrint("❌ Stack trace: $stackTrace");
     }
     
-    print("9. Checking storage access...");
+    debugPrint("7. Checking areas table...");
+    try {
+      final areasCheck = await supabaseClient.from('areas').select().limit(5);
+      debugPrint("8. Areas table check: ${areasCheck.length} records found");
+      if (areasCheck.isNotEmpty) {
+        debugPrint("   First area: ${areasCheck.first}");
+      }
+    } catch (e, stackTrace) {
+      debugPrint("❌ ERROR checking areas table: $e");
+      debugPrint("❌ Stack trace: $stackTrace");
+    }
+    
+    debugPrint("9. Checking storage access...");
     try {
       final buckets = await supabaseClient.storage.listBuckets();
-      print("10. Available buckets: ${buckets.map((b) => b.name).join(', ')}");
-    } catch (e) {
-      print("10. ERROR listing buckets: $e");
+      debugPrint("10. Available buckets: ${buckets.map((b) => b.name).join(', ')}");
+      
+      // Ensure required buckets exist
+      final requiredBuckets = ['area', 'activity', 'accommodation'];
+      for (final bucketName in requiredBuckets) {
+        if (!buckets.any((b) => b.name == bucketName)) {
+          debugPrint("Creating missing bucket: $bucketName");
+          try {
+            await supabaseClient.storage.createBucket(
+              bucketName, 
+              const BucketOptions(public: true)
+            );
+            debugPrint("✅ Created bucket: $bucketName");
+          } catch (e) {
+            debugPrint("❌ Error creating bucket $bucketName: $e");
+          }
+        }
+      }
+    } catch (e, stackTrace) {
+      debugPrint("❌ ERROR listing buckets: $e");
+      debugPrint("❌ Stack trace: $stackTrace");
     }
     
-    print("11. Starting Flutter app...");
+    debugPrint("11. Starting Flutter app...");
     runApp(
       const ProviderScope(
         child: MyApp(),
       ),
     );
     
-  } catch (e) {
-    print("Error initializing app: $e");
+  } catch (e, stackTrace) {
+    debugPrint("❌ Error initializing app: $e");
+    debugPrint("❌ Stack trace: $stackTrace");
     runApp(
       const ProviderScope(
         child: MyApp(),
@@ -56,7 +89,7 @@ void main() async {
     );
   }
   
-  print("============ INITIALIZATION COMPLETE ============");
+  debugPrint("============ INITIALIZATION COMPLETE ============");
 }
 
 class MyApp extends StatelessWidget {
@@ -376,42 +409,9 @@ class DrawerMenu extends StatelessWidget {
               if (onNavigate != null) onNavigate!(4);
             },
           ),
-          ListTile(
-            leading: const Icon(Icons.hotel),
-            title: const Text('Accommodations'),
-            onTap: () {
-              Navigator.pop(context);
-              // Navigate to accommodations screen
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const AccommodationsScreen()),
-              );
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.local_activity),
-            title: const Text('Activities'),
-            onTap: () {
-              Navigator.pop(context);
-              // Navigate to activities screen
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ActivitiesScreen()),
-              );
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.photo_library),
-            title: const Text('Photos'),
-            onTap: () {
-              Navigator.pop(context);
-              // Navigate to photos screen
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const PhotosScreen()),
-              );
-            },
-          ),
+         
+     
+      
           const Divider(),
           ListTile(
             leading: const Icon(Icons.settings),

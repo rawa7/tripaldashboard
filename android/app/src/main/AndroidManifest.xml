@@ -7,6 +7,9 @@
         android:label="tripaldashboard"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyChkgbU5Vs23xCscCQ6oWLjSiCzkKvUPC8" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

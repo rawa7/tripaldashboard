@@ -54,18 +54,7 @@ class _CityDetailScreenState extends ConsumerState<CityDetailScreen> {
                     children: [
                       _buildRegionInfo(city),
                       const SizedBox(height: 16),
-                      const Text(
-                        'Description',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        city.description,
-                        style: const TextStyle(fontSize: 16),
-                      ),
+                      _buildDetailsSection(),
                       const SizedBox(height: 24),
                       const Text(
                         'Photos',
@@ -178,6 +167,132 @@ class _CityDetailScreenState extends ConsumerState<CityDetailScreen> {
       },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, stack) => Text('Error loading region: ${error.toString()}'),
+    );
+  }
+
+  Widget _buildDetailsSection() {
+    final cityAsync = ref.watch(cityProvider(widget.cityId));
+    
+    return cityAsync.when(
+      data: (city) {
+        if (city == null) {
+          return const Center(child: Text('City not found'));
+        }
+        
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'City Details',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const Divider(),
+                const SizedBox(height: 16),
+                
+                // Language tabbed view
+                DefaultTabController(
+                  length: 4,
+                  child: Column(
+                    children: [
+                      TabBar(
+                        isScrollable: true,
+                        tabs: const [
+                          Tab(text: 'English'),
+                          Tab(text: 'العربية'),
+                          Tab(text: 'کوردی'),
+                          Tab(text: 'بادینی'),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        height: 200,
+                        child: TabBarView(
+                          children: [
+                            // English content
+                            _buildLanguageContent(
+                              name: city.name,
+                              description: city.description,
+                            ),
+                            
+                            // Arabic content
+                            _buildLanguageContent(
+                              name: city.nameAr ?? 'Not available',
+                              description: city.descriptionAr ?? 'Not available',
+                              textDirection: TextDirection.rtl,
+                            ),
+                            
+                            // Kurdish content
+                            _buildLanguageContent(
+                              name: city.nameKu ?? 'Not available',
+                              description: city.descriptionKu ?? 'Not available',
+                            ),
+                            
+                            // Badinani content
+                            _buildLanguageContent(
+                              name: city.nameBad ?? 'Not available',
+                              description: city.descriptionBad ?? 'Not available',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, stack) => Center(child: Text('Error: ${error.toString()}')),
+    );
+  }
+
+  Widget _buildLanguageContent({
+    required String name,
+    required String description,
+    TextDirection? textDirection,
+  }) {
+    return Directionality(
+      textDirection: textDirection ?? TextDirection.ltr,
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  'Name: ',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    name,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Description: ',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              description,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
